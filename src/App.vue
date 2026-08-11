@@ -6,11 +6,13 @@ import RankingBoard from './components/RankingBoard.vue'
 import VideoExportPanel, { type VideoItem } from './components/VideoExportPanel.vue'
 import { exportRanking } from './composables/useRankingExport'
 import { exportRecapVideo } from './composables/useRecapVideo'
+import { convertWebmToMp4 } from './composables/useMp4Conversion'
 import { useRankingStore } from './stores/ranking'
 
 const ranking = useRankingStore()
 const videoGenerating = ref(false)
 const videoProgress = ref('')
+const videoFormat = ref<'webm' | 'mp4'>('webm')
 const videoItems = computed<VideoItem[]>(() => ranking.draft.tiers.flatMap((tier, tierIndex) => tier.imageIds.map((imageId, rankIndex) => ({ imageId, name: ranking.draft.images[imageId]?.name ?? '未知图片', url: ranking.draft.images[imageId]?.previewUrl, tierName: tier.name, tierIndex, rankIndex }))))
 const allImagesHaveVoice = computed(() => {
   const imageIds = Object.keys(ranking.draft.images)
@@ -47,15 +49,24 @@ function updateTitle(title: string) {
   ranking.persist()
 }
 
+function download(blob: Blob, suffix: string) {
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${ranking.draft.title || '夯拉排名'}-回顾.${suffix}`; link.click(); window.setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+}
+
+async function renderWebm() {
+  return exportRecapVideo({ title: ranking.draft.title || '夯拉排名', ratio: ranking.draft.aspectRatio, tierNames: ranking.draft.tiers.map((tier) => tier.name), items: videoItems.value, voiceClips: ranking.draft.voiceClips, introVoice: ranking.draft.introVoice, outroVoice: ranking.draft.outroVoice, placementPauseMs: ranking.draft.placementPauseMs, onProgress: (message) => { videoProgress.value = message } })
+}
+
 async function exportVideo() {
   if (!videoItems.value.length) return
   videoGenerating.value = true
-  try {
-    const blob = await exportRecapVideo({ title: ranking.draft.title || '夯拉排名', ratio: ranking.draft.aspectRatio, tierNames: ranking.draft.tiers.map((tier) => tier.name), items: videoItems.value, voiceClips: ranking.draft.voiceClips, introVoice: ranking.draft.introVoice, outroVoice: ranking.draft.outroVoice, placementPauseMs: ranking.draft.placementPauseMs, onProgress: (message) => { videoProgress.value = message } })
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${ranking.draft.title || '夯拉排名'}-回顾.webm`; link.click(); URL.revokeObjectURL(link.href)
-  } finally {
-    videoGenerating.value = false; videoProgress.value = ''
-  }
+  try { download(await renderWebm(), 'webm') } catch (error) { ranking.error = error instanceof Error ? error.message : 'WebM 导出失败，请重试。' } finally { videoGenerating.value = false; videoProgress.value = '' }
+}
+
+async function exportMp4() {
+  if (!videoItems.value.length) return
+  videoGenerating.value = true
+  try { download(await convertWebmToMp4(await renderWebm(), (message) => { videoProgress.value = message }), 'mp4') } catch (error) { ranking.error = error instanceof Error ? error.message : 'MP4 转换失败，请检查网络后重试。' } finally { videoGenerating.value = false; videoProgress.value = '' }
 }
 </script>
 
@@ -80,7 +91,7 @@ async function exportVideo() {
       <footer class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" :disabled="!ranking.hasImages" @click="nextStep">下一步：录制口播 <span>→</span></button></footer>
     </template>
     <template v-else-if="ranking.step === 3">
-      <VideoExportPanel mode="record" :items="Object.values(ranking.draft.images).map((image) => ({ imageId: image.id, name: image.name, url: image.previewUrl, tierName: '' }))" :voice-clips="ranking.draft.voiceClips" :intro-voice="ranking.draft.introVoice" :outro-voice="ranking.draft.outroVoice" :ratio="ranking.draft.aspectRatio" :placement-pause-ms="ranking.draft.placementPauseMs" :generating="false" progress="" @save-voice="ranking.saveVoiceClip" @remove-voice="ranking.removeVoiceClip" @save-narration="ranking.saveNarration" @remove-narration="ranking.removeNarration" @update-ratio="ranking.draft.aspectRatio = $event; ranking.persist()" @update-pause="ranking.draft.placementPauseMs = $event; ranking.persist()" @export-video="exportVideo" />
+      <VideoExportPanel mode="record" :items="Object.values(ranking.draft.images).map((image) => ({ imageId: image.id, name: image.name, url: image.previewUrl, tierName: '' }))" :voice-clips="ranking.draft.voiceClips" :intro-voice="ranking.draft.introVoice" :outro-voice="ranking.draft.outroVoice" :ratio="ranking.draft.aspectRatio" :format="videoFormat" :placement-pause-ms="ranking.draft.placementPauseMs" :generating="false" progress="" @save-voice="ranking.saveVoiceClip" @remove-voice="ranking.removeVoiceClip" @save-narration="ranking.saveNarration" @remove-narration="ranking.removeNarration" @update-ratio="ranking.draft.aspectRatio = $event; ranking.persist()" @update-format="videoFormat = $event" @update-pause="ranking.draft.placementPauseMs = $event; ranking.persist()" @export-video="exportVideo" @export-mp4="exportMp4" />
       <footer class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" @click="nextStep">{{ allImagesHaveVoice ? '下一步：开始排名' : '跳过口播，开始排名' }} <span>→</span></button></footer>
     </template>
 
@@ -100,7 +111,7 @@ async function exportVideo() {
         @rename="ranking.renameTier"
         @remove="ranking.removeImage"
       />
-      <VideoExportPanel v-if="ranking.step === 5" mode="export" :items="videoItems" :voice-clips="ranking.draft.voiceClips" :intro-voice="ranking.draft.introVoice" :outro-voice="ranking.draft.outroVoice" :ratio="ranking.draft.aspectRatio" :placement-pause-ms="ranking.draft.placementPauseMs" :generating="videoGenerating" :progress="videoProgress" @save-voice="ranking.saveVoiceClip" @remove-voice="ranking.removeVoiceClip" @save-narration="ranking.saveNarration" @remove-narration="ranking.removeNarration" @update-ratio="ranking.draft.aspectRatio = $event; ranking.persist()" @update-pause="ranking.draft.placementPauseMs = $event; ranking.persist()" @export-video="exportVideo" />
+      <VideoExportPanel v-if="ranking.step === 5" mode="export" :items="videoItems" :voice-clips="ranking.draft.voiceClips" :intro-voice="ranking.draft.introVoice" :outro-voice="ranking.draft.outroVoice" :ratio="ranking.draft.aspectRatio" :format="videoFormat" :placement-pause-ms="ranking.draft.placementPauseMs" :generating="videoGenerating" :progress="videoProgress" @save-voice="ranking.saveVoiceClip" @remove-voice="ranking.removeVoiceClip" @save-narration="ranking.saveNarration" @remove-narration="ranking.removeNarration" @update-ratio="ranking.draft.aspectRatio = $event; ranking.persist()" @update-format="videoFormat = $event" @update-pause="ranking.draft.placementPauseMs = $event; ranking.persist()" @export-video="exportVideo" @export-mp4="exportMp4" />
       <footer v-if="ranking.step === 4" class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" :disabled="!ranking.canExport" @click="nextStep">下一步：导出视频 <span>→</span></button></footer>
       <footer v-else class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="secondary-button" type="button" :disabled="!ranking.canExport" @click="exportImage">导出 PNG</button><button class="primary-button" type="button" :disabled="videoGenerating || !ranking.canExport" @click="exportVideo">{{ videoGenerating ? videoProgress : '导出 WebM 视频' }} <span>↓</span></button></footer>
     </template>
