@@ -45,6 +45,16 @@
   - 初始化 Git 仓库；`dist/` 已存在于历史追踪中，因此未擅自执行从索引移除的操作。
 - Files created/modified:
   - .gitignore
+
+### 回顾视频与口播
+- **Status:** complete
+- Actions taken:
+  - 在排名前增加逐图浏览器录音步骤，口播 Blob 持久化至 IndexedDB。
+  - 导出 WebM 时按图片最终排名顺序渲染居中放大镜头、混入口播并追加最终排名画面。
+- Files created/modified:
+  - src/components/VoiceRecorder.vue
+  - src/components/VideoExportPanel.vue
+  - src/composables/useRecapVideo.ts
 - Files created/modified:
   - task_plan.md
   - findings.md

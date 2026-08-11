@@ -1,7 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { TIER_PRESETS } from '../data/presets'
-import { clearStorage, deleteImage, loadDraft, loadImage, saveDraft, saveImage } from '../services/storage'
+import { clearStorage, deleteImage, deleteVoice, loadDraft, loadImage, loadVoice, saveDraft, saveImage, saveVoice } from '../services/storage'
 import { type RankTier, type RankingDraft, type WorkflowStep } from '../types/ranking'
 
 const uid = () => crypto.randomUUID()
@@ -15,6 +15,7 @@ function makeDraft(): RankingDraft {
     aspectRatio: '16:9',
     tiers: preset.tierNames.map((name) => ({ id: uid(), name, imageIds: [] })),
     images: {},
+    voiceClips: {},
     unassignedImageIds: [],
     updatedAt: Date.now(),
   }
@@ -41,11 +42,15 @@ export const useRankingStore = defineStore('ranking', () => {
       const blob = await loadImage(image.blobKey)
       if (blob) image.previewUrl = URL.createObjectURL(blob)
     }))
+    await Promise.all(Object.values(draft.voiceClips).map(async (clip) => {
+      const blob = await loadVoice(clip.blobKey)
+      if (blob) clip.previewUrl = URL.createObjectURL(blob)
+    }))
   }
 
   async function init() {
     const stored = await loadDraft()
-    if (stored) replaceDraft({ ...stored, aspectRatio: stored.aspectRatio ?? '16:9' })
+    if (stored) replaceDraft({ ...stored, aspectRatio: stored.aspectRatio ?? '16:9', voiceClips: stored.voiceClips ?? {} })
     await hydratePreviews()
     isReady.value = true
   }
@@ -114,6 +119,28 @@ export const useRankingStore = defineStore('ranking', () => {
     draft.unassignedImageIds = draft.unassignedImageIds.filter((imageId) => imageId !== id)
     delete draft.images[id]
     await deleteImage(id)
+    if (draft.voiceClips[id]) {
+      URL.revokeObjectURL(draft.voiceClips[id].previewUrl ?? '')
+      delete draft.voiceClips[id]
+      await deleteVoice(id)
+    }
+    scheduleSave()
+  }
+
+  async function saveVoiceClip(imageId: string, blob: Blob, durationMs: number) {
+    const previous = draft.voiceClips[imageId]
+    if (previous?.previewUrl) URL.revokeObjectURL(previous.previewUrl)
+    await saveVoice(imageId, blob)
+    draft.voiceClips[imageId] = { imageId, blobKey: imageId, durationMs, previewUrl: URL.createObjectURL(blob) }
+    scheduleSave()
+  }
+
+  async function removeVoiceClip(imageId: string) {
+    const clip = draft.voiceClips[imageId]
+    if (!clip) return
+    if (clip.previewUrl) URL.revokeObjectURL(clip.previewUrl)
+    delete draft.voiceClips[imageId]
+    await deleteVoice(imageId)
     scheduleSave()
   }
 
@@ -124,5 +151,5 @@ export const useRankingStore = defineStore('ranking', () => {
     step.value = 1
   }
 
-  return { draft, step, isReady, isSaving, error, selectedPreset, hasImages, canExport, init, setStep, applyPreset, uploadFiles, canMove, saveRanking, renameTier, removeImage, reset, persist }
+  return { draft, step, isReady, isSaving, error, selectedPreset, hasImages, canExport, init, setStep, applyPreset, uploadFiles, canMove, saveRanking, renameTier, removeImage, saveVoiceClip, removeVoiceClip, reset, persist }
 })
