@@ -1,0 +1,22 @@
+.rank-editor-frame .export-heading {
+  justify-content: center;
+  text-align: center;
+}
+
+.export-toast {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: 90px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  color: #fff;
+  background: #314057;
+  box-shadow: 0 10px 28px rgba(25, 39, 61, .22);
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toast-enter-active, .toast-leave-active { transition: opacity .18s, transform .18s; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, 8px); }

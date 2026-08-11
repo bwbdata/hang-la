@@ -35,6 +35,9 @@ export const useRankingStore = defineStore('ranking', () => {
   const canExport = computed(() => draft.tiers.some((tier) => tier.imageIds.length > 0))
 
   function replaceDraft(value: RankingDraft) {
+    Object.keys(draft).forEach((key) => {
+      if (!(key in value)) delete (draft as Record<string, unknown>)[key]
+    })
     Object.assign(draft, value)
   }
 
@@ -114,6 +117,13 @@ export const useRankingStore = defineStore('ranking', () => {
 
   function saveRanking() { scheduleSave() }
 
+  function unassignImage(id: string) {
+    if (!draft.images[id]) return
+    draft.tiers.forEach((tier) => { tier.imageIds = tier.imageIds.filter((imageId) => imageId !== id) })
+    if (!draft.unassignedImageIds.includes(id)) draft.unassignedImageIds.push(id)
+    scheduleSave()
+  }
+
   function renameTier(tier: RankTier, name: string) {
     tier.name = name.trim() || '未命名等级'
     scheduleSave()
@@ -171,10 +181,12 @@ export const useRankingStore = defineStore('ranking', () => {
 
   async function reset() {
     Object.values(draft.images).forEach((image) => image.previewUrl && URL.revokeObjectURL(image.previewUrl))
+    Object.values(draft.voiceClips).forEach((clip) => clip.previewUrl && URL.revokeObjectURL(clip.previewUrl))
+    for (const clip of [draft.introVoice, draft.outroVoice]) if (clip?.previewUrl) URL.revokeObjectURL(clip.previewUrl)
     await clearStorage()
     replaceDraft(makeDraft())
     step.value = 1
   }
 
-  return { draft, step, isReady, isSaving, error, selectedPreset, hasImages, canExport, init, setStep, applyPreset, uploadFiles, canMove, saveRanking, renameTier, removeImage, saveVoiceClip, removeVoiceClip, saveNarration, removeNarration, reset, persist }
+  return { draft, step, isReady, isSaving, error, selectedPreset, hasImages, canExport, init, setStep, applyPreset, uploadFiles, canMove, saveRanking, unassignImage, renameTier, removeImage, saveVoiceClip, removeVoiceClip, saveNarration, removeNarration, reset, persist }
 })

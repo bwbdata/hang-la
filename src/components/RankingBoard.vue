@@ -6,7 +6,6 @@ import RankTierCard from './RankTier.vue'
 
 defineProps<{
   title: string
-  presetTag: string
   aspectRatio: OutputRatio
   tiers: RankTier[]
   images: Record<string, RankImage>
@@ -20,7 +19,7 @@ const emit = defineEmits<{ change: []; rename: [tier: RankTier, name: string]; r
   <section class="board-wrap">
     <div id="rank-export" class="rank-video-frame rank-editor-frame" :class="`ratio-${aspectRatio.replace(':', '-')}`">
       <div class="rank-board">
-        <header class="export-heading"><span># {{ presetTag }}</span><h2>{{ title || '夯拉排名' }}</h2></header>
+        <header class="export-heading"><h2>{{ title || '夯拉排名' }}</h2></header>
         <div class="tier-stack">
         <RankTierCard
           v-for="tier in tiers"
