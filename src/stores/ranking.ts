@@ -3,7 +3,6 @@ import { defineStore } from 'pinia'
 import { TIER_PRESETS } from '../data/presets'
 import { clearStorage, deleteImage, loadDraft, loadImage, saveDraft, saveImage } from '../services/storage'
 import { type RankTier, type RankingDraft, type WorkflowStep } from '../types/ranking'
-import { canPlaceInTier } from '../utils/rank'
 
 const uid = () => crypto.randomUUID()
 
@@ -11,8 +10,9 @@ function makeDraft(): RankingDraft {
   const preset = TIER_PRESETS[0]
   return {
     id: uid(),
-    title: '本次排名',
+    title: '',
     presetId: preset.id,
+    aspectRatio: '16:9',
     tiers: preset.tierNames.map((name) => ({ id: uid(), name, imageIds: [] })),
     images: {},
     unassignedImageIds: [],
@@ -45,7 +45,7 @@ export const useRankingStore = defineStore('ranking', () => {
 
   async function init() {
     const stored = await loadDraft()
-    if (stored) replaceDraft(stored)
+    if (stored) replaceDraft({ ...stored, aspectRatio: stored.aspectRatio ?? '16:9' })
     await hydratePreviews()
     isReady.value = true
   }
@@ -97,8 +97,8 @@ export const useRankingStore = defineStore('ranking', () => {
   function tierById(id: string) { return draft.tiers.find((tier) => tier.id === id) }
 
   function canMove(toTierId: string, fromTierId?: string) {
-    const target = tierById(toTierId)
-    return Boolean(target && canPlaceInTier(target.imageIds.length, toTierId === fromTierId))
+    void fromTierId
+    return Boolean(tierById(toTierId))
   }
 
   function saveRanking() { scheduleSave() }

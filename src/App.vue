@@ -32,42 +32,43 @@ function nextStep() {
 function previousStep() {
   if (ranking.step > 1) ranking.setStep((ranking.step - 1) as 1 | 2 | 3)
 }
+
+function updateTitle(title: string) {
+  ranking.draft.title = title
+  ranking.persist()
+}
 </script>
 
 <template>
   <main v-if="ranking.isReady" class="app-shell">
     <div class="fixed-top-area">
       <header class="topbar">
-        <a class="brand" href="#" @click.prevent="ranking.setStep(1)"><span>夯</span> 拉排名</a>
-        <div class="title-field"><input v-model="ranking.draft.title" maxlength="30" aria-label="排名标题" @change="ranking.persist" /></div>
+        <a class="brand" href="#" @click.prevent="ranking.setStep(1)">夯拉排名</a>
         <div class="save-state"><i :class="{ saving: ranking.isSaving }"></i>{{ ranking.isSaving ? '保存中' : '已保存' }}</div>
         <button class="text-button danger" type="button" @click="clearDraft">清空</button>
       </header>
-
-      <section class="hero">
-        <h1>给图片排个名次</h1>
-        <p>选模板、上传、拖动，导出即分享。</p>
-      </section>
     </div>
 
     <p v-if="ranking.error" class="notice">{{ ranking.error }}</p>
 
     <template v-if="ranking.step === 1">
-      <PresetPicker :selected-id="ranking.draft.presetId" @select="ranking.applyPreset" />
+      <PresetPicker :selected-id="ranking.draft.presetId" :title="ranking.draft.title" @select="ranking.applyPreset" @update-title="updateTitle" />
       <footer class="step-footer"><button class="primary-button" type="button" @click="nextStep">下一步：上传图片 <span>→</span></button></footer>
     </template>
     <template v-else-if="ranking.step === 2">
-      <ImageUploader @files="ranking.uploadFiles" />
+      <ImageUploader :images="ranking.draft.images" @files="ranking.uploadFiles" @remove="ranking.removeImage" />
       <footer class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" :disabled="!ranking.hasImages" @click="nextStep">下一步 <span>→</span></button></footer>
     </template>
 
     <template v-else>
       <section class="rank-toolbar">
-        <div><span class="eyebrow">STEP {{ ranking.step === 3 ? '03' : '04' }}</span><h2>{{ ranking.step === 3 ? '拖动图片，开始排位' : '检查完成，导出你的排名' }}</h2></div>
+        <div><span class="eyebrow">{{ ranking.step === 3 ? '拖动图片调整顺序' : '检查后导出图片' }}</span><h2>{{ ranking.selectedPreset.tag }} 排名</h2></div>
+        <label class="ratio-picker">画布比例<select v-model="ranking.draft.aspectRatio" @change="ranking.persist"><option value="16:9">16 : 9</option><option value="3:4">3 : 4</option></select></label>
       </section>
       <RankingBoard
-        :title="ranking.draft.title"
+        :title="ranking.draft.title || '夯拉排名'"
         :preset-tag="ranking.selectedPreset.tag"
+        :aspect-ratio="ranking.draft.aspectRatio"
         :tiers="ranking.draft.tiers"
         :images="ranking.draft.images"
         :unassigned="ranking.draft.unassignedImageIds"

@@ -1,4 +1,5 @@
 export type WorkflowStep = 1 | 2 | 3 | 4
+export type OutputRatio = '16:9' | '3:4'
 
 export interface RankImage {
   id: string
@@ -24,6 +25,7 @@ export interface RankingDraft {
   id: string
   title: string
   presetId: string
+  aspectRatio: OutputRatio
   tiers: RankTier[]
   images: Record<string, RankImage>
   unassignedImageIds: string[]

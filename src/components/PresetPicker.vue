@@ -2,8 +2,8 @@
 import { ref } from 'vue'
 import { TIER_PRESETS } from '../data/presets'
 
-defineProps<{ selectedId: string }>()
-const emit = defineEmits<{ select: [id: string] }>()
+defineProps<{ selectedId: string; title: string }>()
+const emit = defineEmits<{ select: [id: string]; updateTitle: [title: string] }>()
 const keyword = ref('')
 
 const filtered = () => TIER_PRESETS.filter((preset) =>
@@ -13,11 +13,11 @@ const filtered = () => TIER_PRESETS.filter((preset) =>
 
 <template>
   <section class="step-panel preset-panel">
-    <div class="panel-heading">
-      <span class="eyebrow">STEP 01</span>
-      <h2>先选一个标签类型</h2>
-      <p>每套都是五档固定排序，选中后也能按你的语气改名字。</p>
+    <div class="title-section">
+      <h2>本次排名标题</h2>
+      <label class="ranking-title-input"><input :value="title" maxlength="15" placeholder="请填入本次排名标题" @input="emit('updateTitle', ($event.target as HTMLInputElement).value)" /><small>{{ title.length }}/15</small></label>
     </div>
+    <div class="template-section-heading"><h2>再选一个标签模板</h2><p>每套都是五档固定排序，选中后也能按你的语气改名字。</p></div>
     <label class="search-box"><span>⌕</span><input v-model="keyword" placeholder="搜索标签或等级名称" /></label>
     <div class="preset-list">
       <button
