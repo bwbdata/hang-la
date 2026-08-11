@@ -4,6 +4,7 @@ const definePreset = (id: string, tag: string, tierNames: TierPreset['tierNames'
 
 export const TIER_PRESETS: TierPreset[] = [
   definePreset('hang-la', '默认夯拉', ['夯', '顶级', '人上人', 'NPC', '拉完了']),
+  definePreset('horse', '马力评级', ['千里马', '黑马', '中等马', '没有马', '马喽']),
   definePreset('t-series', 'T 系', ['T0', 'T1', 'T2', 'T3', 'T4']),
   definePreset('letter-grade', '字母梯度', ['SSS', 'S', 'A', 'B', 'C']),
   definePreset('jianghu', '江湖实力', ['绝世', '一流', '二流', '三流', '不入流']),
