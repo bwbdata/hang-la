@@ -20,6 +20,12 @@ function drawCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement | unde
   ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
+function drawContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement | undefined, x: number, y: number, width: number, height: number) {
+  if (!image) return
+  const scale = Math.min(width / image.width, height / image.height); const drawWidth = image.width * scale; const drawHeight = image.height * scale
+  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
+}
+
 function dimensions(width: number, height: number) {
   const margin = width * .045; const titleY = height * .075; const top = height * .16; const bottom = height * .07
   const rowHeight = (height - top - bottom) / 5; const labelWidth = width * .16; const gridLeft = margin + labelWidth + width * .025
@@ -45,8 +51,8 @@ function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number,
   placed.forEach((item) => { const target = targetFor(item, width, height); ctx.save(); roundedClip(ctx, target.x, target.y, target.width, target.height, 10); drawCover(ctx, item.image, target.x, target.y, target.width, target.height); ctx.restore() })
 }
 
-function drawFloatingImage(ctx: CanvasRenderingContext2D, item: LoadedScene, x: number, y: number, width: number, height: number, nameSize: number) {
-  ctx.save(); roundedClip(ctx, x, y, width, height, 18); drawCover(ctx, item.image, x, y, width, height); ctx.restore()
+function drawFloatingImage(ctx: CanvasRenderingContext2D, item: LoadedScene, x: number, y: number, width: number, height: number, nameSize: number, contain = false) {
+  ctx.save(); roundedClip(ctx, x, y, width, height, 18); if (contain) drawContain(ctx, item.image, x, y, width, height); else drawCover(ctx, item.image, x, y, width, height); ctx.restore()
   ctx.fillStyle = '#2e3a50'; ctx.font = `700 ${nameSize}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(item.name, x + width / 2, y + height + nameSize * 1.6)
 }
 
@@ -54,26 +60,38 @@ function animate(duration: number, frame: (progress: number) => void) {
   return new Promise<void>((resolve) => { const began = performance.now(); const loop = (now: number) => { const progress = Math.min(1, (now - began) / duration); frame(progress); progress < 1 ? requestAnimationFrame(loop) : resolve() }; requestAnimationFrame(loop) })
 }
 
-export async function exportRecapVideo(args: { title: string; ratio: OutputRatio; tierNames: string[]; items: VideoItem[]; voiceClips: Record<string, VoiceClip>; onProgress: (message: string) => void }) {
-  const portrait = args.ratio === '3:4'; const width = portrait ? 900 : 1280; const height = portrait ? 1200 : 720
+export async function exportRecapVideo(args: { title: string; ratio: OutputRatio; tierNames: string[]; items: VideoItem[]; voiceClips: Record<string, VoiceClip>; introVoice?: VoiceClip; outroVoice?: VoiceClip; placementPauseMs: number; onProgress: (message: string) => void }) {
+  const portrait = args.ratio === '3:4'; const width = portrait ? 1080 : 1920; const height = portrait ? 1440 : 1080
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('无法创建视频画布')
   const audioContext = new AudioContext(); const destination = audioContext.createMediaStreamDestination(); const canvasStream = canvas.captureStream(30)
   const stream = new MediaStream([...canvasStream.getVideoTracks(), ...destination.stream.getAudioTracks()]); const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm'
-  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 5_000_000 }); const chunks: BlobPart[] = []; recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
+  const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 }); const chunks: BlobPart[] = []; recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
   const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' })) })
   const scenes: LoadedScene[] = await Promise.all(args.items.map(async (item) => ({ ...item, image: item.url ? await loadImage(item.url).catch(() => undefined) : undefined })))
   recorder.start(1000); await audioContext.resume(); const placed: LoadedScene[] = []
 
+  async function playVoice(clip?: VoiceClip) {
+    if (!clip) return
+    const blob = await loadVoice(clip.blobKey)
+    if (!blob) return
+    const audio = new Audio(URL.createObjectURL(blob)); audio.onended = () => URL.revokeObjectURL(audio.src)
+    audioContext.createMediaElementSource(audio).connect(destination); void audio.play().catch(() => undefined)
+  }
+
+  args.onProgress('正在添加开头解说…'); await playVoice(args.introVoice)
+  await animate(Math.max(1500, (args.introVoice?.durationMs ?? 0) + 250), () => drawBoard(ctx, width, height, args.title, args.tierNames, []))
+
   for (let index = 0; index < scenes.length; index += 1) {
     const item = scenes[index]; const clip = args.voiceClips[item.imageId]; const narrationDuration = Math.max(2400, (clip?.durationMs ?? 0) + 250)
-    if (clip) { const blob = await loadVoice(clip.blobKey); if (blob) { const audio = new Audio(URL.createObjectURL(blob)); audio.onended = () => URL.revokeObjectURL(audio.src); audioContext.createMediaElementSource(audio).connect(destination); void audio.play().catch(() => undefined) } }
+    await playVoice(clip)
     args.onProgress(`正在放置 ${index + 1}/${scenes.length}`)
-    await animate(narrationDuration, (progress) => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const boxW = width * (portrait ? .68 : .38) * (.88 + progress * .12); const boxH = height * (portrait ? .38 : .56) * (.88 + progress * .12); drawFloatingImage(ctx, item, (width - boxW) / 2, (height - boxH) / 2 - height * .025, boxW, boxH, Math.round(width * .02)) })
+    await animate(narrationDuration, (progress) => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const zoomProgress = Math.min(1, (progress * narrationDuration) / 500); const boxW = width * (portrait ? .68 : .38) * (.86 + zoomProgress * .14); const boxH = height * (portrait ? .38 : .56) * (.86 + zoomProgress * .14); drawFloatingImage(ctx, item, (width - boxW) / 2, (height - boxH) / 2 - height * .025, boxW, boxH, Math.round(width * .02), true) })
     const startW = width * (portrait ? .68 : .38); const startH = height * (portrait ? .38 : .56); const startX = (width - startW) / 2; const startY = (height - startH) / 2 - height * .025; const target = targetFor(item, width, height)
     await animate(650, (progress) => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const x = startX + (target.x - startX) * progress; const y = startY + (target.y - startY) * progress; const boxW = startW + (target.width - startW) * progress; const boxH = startH + (target.height - startH) * progress; drawFloatingImage(ctx, item, x, y, boxW, boxH, Math.max(1, Math.round(width * .02 * (1 - progress))) ) })
     placed.push(item)
+    await animate(args.placementPauseMs, () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
   }
-  args.onProgress('正在完成最终榜单…'); await animate(1800, () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
+  args.onProgress('正在添加结尾解说…'); await playVoice(args.outroVoice); await animate(Math.max(1800, (args.outroVoice?.durationMs ?? 0) + 250), () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
   recorder.stop(); const blob = await done; await audioContext.close(); return blob
 }

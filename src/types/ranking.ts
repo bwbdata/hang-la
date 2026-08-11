@@ -33,9 +33,12 @@ export interface RankingDraft {
   title: string
   presetId: string
   aspectRatio: OutputRatio
+  placementPauseMs: number
   tiers: RankTier[]
   images: Record<string, RankImage>
   voiceClips: Record<string, VoiceClip>
+  introVoice?: VoiceClip
+  outroVoice?: VoiceClip
   unassignedImageIds: string[]
   updatedAt: number
 }

@@ -13,6 +13,7 @@ function makeDraft(): RankingDraft {
     title: '',
     presetId: preset.id,
     aspectRatio: '16:9',
+    placementPauseMs: 1500,
     tiers: preset.tierNames.map((name) => ({ id: uid(), name, imageIds: [] })),
     images: {},
     voiceClips: {},
@@ -46,11 +47,16 @@ export const useRankingStore = defineStore('ranking', () => {
       const blob = await loadVoice(clip.blobKey)
       if (blob) clip.previewUrl = URL.createObjectURL(blob)
     }))
+    for (const clip of [draft.introVoice, draft.outroVoice]) {
+      if (!clip) continue
+      const blob = await loadVoice(clip.blobKey)
+      if (blob) clip.previewUrl = URL.createObjectURL(blob)
+    }
   }
 
   async function init() {
     const stored = await loadDraft()
-    if (stored) replaceDraft({ ...stored, aspectRatio: stored.aspectRatio ?? '16:9', voiceClips: stored.voiceClips ?? {} })
+    if (stored) replaceDraft({ ...stored, aspectRatio: stored.aspectRatio ?? '16:9', placementPauseMs: stored.placementPauseMs ?? 1500, voiceClips: stored.voiceClips ?? {} })
     await hydratePreviews()
     isReady.value = true
   }
@@ -144,6 +150,25 @@ export const useRankingStore = defineStore('ranking', () => {
     scheduleSave()
   }
 
+  async function saveNarration(kind: 'intro' | 'outro', blob: Blob, durationMs: number) {
+    const key = `__${kind}__`
+    const current = kind === 'intro' ? draft.introVoice : draft.outroVoice
+    if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl)
+    await saveVoice(key, blob)
+    const clip = { imageId: key, blobKey: key, durationMs, previewUrl: URL.createObjectURL(blob) }
+    if (kind === 'intro') draft.introVoice = clip; else draft.outroVoice = clip
+    scheduleSave()
+  }
+
+  async function removeNarration(kind: 'intro' | 'outro') {
+    const clip = kind === 'intro' ? draft.introVoice : draft.outroVoice
+    if (!clip) return
+    if (clip.previewUrl) URL.revokeObjectURL(clip.previewUrl)
+    if (kind === 'intro') delete draft.introVoice; else delete draft.outroVoice
+    await deleteVoice(`__${kind}__`)
+    scheduleSave()
+  }
+
   async function reset() {
     Object.values(draft.images).forEach((image) => image.previewUrl && URL.revokeObjectURL(image.previewUrl))
     await clearStorage()
@@ -151,5 +176,5 @@ export const useRankingStore = defineStore('ranking', () => {
     step.value = 1
   }
 
-  return { draft, step, isReady, isSaving, error, selectedPreset, hasImages, canExport, init, setStep, applyPreset, uploadFiles, canMove, saveRanking, renameTier, removeImage, saveVoiceClip, removeVoiceClip, reset, persist }
+  return { draft, step, isReady, isSaving, error, selectedPreset, hasImages, canExport, init, setStep, applyPreset, uploadFiles, canMove, saveRanking, renameTier, removeImage, saveVoiceClip, removeVoiceClip, saveNarration, removeNarration, reset, persist }
 })
