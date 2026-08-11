@@ -95,7 +95,7 @@ async function exportMp4() {
       <footer class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" @click="nextStep">{{ allImagesHaveVoice ? '下一步：开始排名' : '跳过口播，开始排名' }} <span>→</span></button></footer>
     </template>
 
-    <template v-else>
+    <template v-else-if="ranking.step === 4">
       <section class="rank-toolbar">
         <div><span class="eyebrow">{{ ranking.step === 4 ? '拖动图片调整顺序' : '检查后导出图片' }}</span><h2>{{ ranking.selectedPreset.tag }} 排名</h2></div>
       </section>
@@ -111,9 +111,11 @@ async function exportMp4() {
         @rename="ranking.renameTier"
         @remove="ranking.removeImage"
       />
-      <VideoExportPanel v-if="ranking.step === 5" mode="export" :items="videoItems" :voice-clips="ranking.draft.voiceClips" :intro-voice="ranking.draft.introVoice" :outro-voice="ranking.draft.outroVoice" :ratio="ranking.draft.aspectRatio" :format="videoFormat" :placement-pause-ms="ranking.draft.placementPauseMs" :generating="videoGenerating" :progress="videoProgress" @save-voice="ranking.saveVoiceClip" @remove-voice="ranking.removeVoiceClip" @save-narration="ranking.saveNarration" @remove-narration="ranking.removeNarration" @update-ratio="ranking.draft.aspectRatio = $event; ranking.persist()" @update-format="videoFormat = $event" @update-pause="ranking.draft.placementPauseMs = $event; ranking.persist()" @export-video="exportVideo" @export-mp4="exportMp4" />
-      <footer v-if="ranking.step === 4" class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" :disabled="!ranking.canExport" @click="nextStep">下一步：导出视频 <span>→</span></button></footer>
-      <footer v-else class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="secondary-button" type="button" :disabled="!ranking.canExport" @click="exportImage">导出 PNG</button><button class="primary-button" type="button" :disabled="videoGenerating || !ranking.canExport" @click="exportVideo">{{ videoGenerating ? videoProgress : '导出 WebM 视频' }} <span>↓</span></button></footer>
+      <footer class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 上一步</button><button class="primary-button" type="button" :disabled="!ranking.canExport" @click="nextStep">下一步：导出视频 <span>→</span></button></footer>
+    </template>
+    <template v-else>
+      <VideoExportPanel mode="export" :items="videoItems" :voice-clips="ranking.draft.voiceClips" :intro-voice="ranking.draft.introVoice" :outro-voice="ranking.draft.outroVoice" :ratio="ranking.draft.aspectRatio" :format="videoFormat" :placement-pause-ms="ranking.draft.placementPauseMs" :generating="videoGenerating" :progress="videoProgress" @save-voice="ranking.saveVoiceClip" @remove-voice="ranking.removeVoiceClip" @save-narration="ranking.saveNarration" @remove-narration="ranking.removeNarration" @update-ratio="ranking.draft.aspectRatio = $event; ranking.persist()" @update-format="videoFormat = $event" @update-pause="ranking.draft.placementPauseMs = $event; ranking.persist()" @export-video="exportVideo" @export-mp4="exportMp4" />
+      <footer class="step-footer"><button class="secondary-button" type="button" @click="previousStep">← 返回排名</button><button class="secondary-button" type="button" :disabled="!ranking.canExport" @click="exportImage">导出 PNG</button></footer>
     </template>
   </main>
   <div v-else class="loading">正在加载你的本机草稿…</div>

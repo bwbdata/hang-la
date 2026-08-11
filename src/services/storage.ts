@@ -17,8 +17,22 @@ export async function loadDraft(): Promise<RankingDraft | undefined> {
 }
 
 export async function saveDraft(draft: RankingDraft): Promise<void> {
-  const persistable = structuredClone(draft)
-  Object.values(persistable.images).forEach((image) => delete image.previewUrl)
+  // `draft` is a Vue reactive Proxy. IndexedDB/structuredClone cannot persist
+  // Proxies, so build a plain snapshot and deliberately leave out object URLs.
+  const withoutPreview = <T extends { previewUrl?: string }>(value: T | undefined) => {
+    if (!value) return undefined
+    const { previewUrl: _previewUrl, ...persistable } = value
+    return persistable
+  }
+  const persistable: RankingDraft = {
+    ...draft,
+    tiers: draft.tiers.map((tier) => ({ ...tier, imageIds: [...tier.imageIds] })),
+    images: Object.fromEntries(Object.entries(draft.images).map(([id, image]) => [id, withoutPreview(image)!])),
+    voiceClips: Object.fromEntries(Object.entries(draft.voiceClips).map(([id, clip]) => [id, withoutPreview(clip)!])),
+    introVoice: withoutPreview(draft.introVoice),
+    outroVoice: withoutPreview(draft.outroVoice),
+    unassignedImageIds: [...draft.unassignedImageIds],
+  }
   await (await dbPromise).put('drafts', persistable, DRAFT_KEY)
 }
 
