@@ -1,0 +1,7 @@
+.topbar .about-link { margin-left: auto; }
+.footer-draft-actions { display: flex; align-items: center; gap: 12px; color: #7a8799; font-size: 12px; }
+.footer-draft-actions span { display: flex; align-items: center; gap: 7px; }
+.footer-draft-actions i { width: 7px; height: 7px; border-radius: 50%; background: #7fb44d; }
+.footer-draft-actions i.saving { animation: pulse .8s infinite alternate; background: #d6a94d; }
+.footer-draft-actions button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 10px; color: #29431d; background: #bde872; font-size: 14px; font-weight: 800; }
+.footer-draft-actions button:hover { background: #acd960; }

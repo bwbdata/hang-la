@@ -80,6 +80,7 @@ export const useRankingStore = defineStore('ranking', () => {
   }
 
   function setStep(next: WorkflowStep) {
+    if (next === 6) { step.value = next; return }
     if (next === 2 && !draft.presetId) return
     if (next >= 3 && !hasImages.value) return
     step.value = next
