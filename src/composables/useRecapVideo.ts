@@ -67,9 +67,11 @@ export async function exportRecapVideo(args: { title: string; ratio: OutputRatio
   const audioContext = new AudioContext(); const destination = audioContext.createMediaStreamDestination(); const canvasStream = canvas.captureStream(30)
   const stream = new MediaStream([...canvasStream.getVideoTracks(), ...destination.stream.getAudioTracks()]); const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm'
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 }); const chunks: BlobPart[] = []; recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
-  const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' })) })
+  const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: mime })) })
   const scenes: LoadedScene[] = await Promise.all(args.items.map(async (item) => ({ ...item, image: item.url ? await loadImage(item.url).catch(() => undefined) : undefined })))
-  recorder.start(1000); await audioContext.resume(); const placed: LoadedScene[] = []
+  // Do not request periodic chunks. Some browsers return media fragments for
+  // those chunks; a single final chunk always carries the WebM EBML header.
+  recorder.start(); await audioContext.resume(); const placed: LoadedScene[] = []
 
   async function playVoice(clip?: VoiceClip) {
     if (!clip) return
@@ -93,5 +95,9 @@ export async function exportRecapVideo(args: { title: string; ratio: OutputRatio
     await animate(args.placementPauseMs, () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
   }
   args.onProgress('正在添加结尾解说…'); await playVoice(args.outroVoice); await animate(Math.max(1800, (args.outroVoice?.durationMs ?? 0) + 250), () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
-  recorder.stop(); const blob = await done; await audioContext.close(); return blob
+  recorder.stop(); const blob = await done; await audioContext.close()
+  const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer())
+  const validWebm = header.length === 4 && header[0] === 0x1a && header[1] === 0x45 && header[2] === 0xdf && header[3] === 0xa3
+  if (!validWebm) throw new Error('浏览器没有生成有效的 WebM 回顾文件，请刷新页面后重试。')
+  return blob
 }
