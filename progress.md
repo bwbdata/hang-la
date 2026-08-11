@@ -37,6 +37,14 @@
   - 使用 IndexedDB 保存图片 Blob 与草稿，导出 PNG 时包含标题和模板标签。
 - Files created/modified:
   - src/
+
+### Repository setup
+- **Status:** complete
+- Actions taken:
+  - 添加 Vite + Vue 项目的 `.gitignore`，覆盖依赖、构建产物、环境变量、日志、缓存和编辑器文件。
+  - 初始化 Git 仓库；`dist/` 已存在于历史追踪中，因此未擅自执行从索引移除的操作。
+- Files created/modified:
+  - .gitignore
 - Files created/modified:
   - task_plan.md
   - findings.md
