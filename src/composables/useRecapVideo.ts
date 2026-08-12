@@ -29,13 +29,13 @@ function drawContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement | un
 function dimensions(width: number, height: number) {
   const margin = 0; const titleY = height * .075; const top = height * .14; const bottom = height * .045
   const rowHeight = (height - top - bottom) / 5; const labelWidth = width * .2; const gridLeft = labelWidth + width * .012
-  const cardWidth = Math.min((width - gridLeft - width * .012 - 6 * 8) / 7, rowHeight - 16); const cardHeight = rowHeight - 16
-  return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardWidth, cardHeight }
+  const cardSize = Math.min((width - gridLeft - width * .012 - 6 * 8) / 7, rowHeight - 16)
+  return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardSize }
 }
 
 function targetFor(item: VideoItem, width: number, height: number) {
   const d = dimensions(width, height); const tier = item.tierIndex ?? 0; const rank = item.rankIndex ?? 0
-  return { x: d.gridLeft + rank * (d.cardWidth + 8), y: d.top + tier * d.rowHeight + 9, width: d.cardWidth, height: d.cardHeight }
+  return { x: d.gridLeft + rank * (d.cardSize + 8), y: d.top + tier * d.rowHeight + (d.rowHeight - d.cardSize) / 2, width: d.cardSize, height: d.cardSize }
 }
 
 function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number, title: string, tierNames: string[], placed: LoadedScene[]) {
@@ -46,7 +46,8 @@ function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number,
     const y = d.top + index * d.rowHeight
     ctx.fillStyle = '#909090'; ctx.fillRect(d.margin, y, width - d.margin * 2, d.rowHeight)
     ctx.fillStyle = tierColors[index] ?? '#f4f4f4'; ctx.fillRect(d.margin, y, d.labelWidth, d.rowHeight)
-    ctx.fillStyle = tierTextColors[index] ?? '#344257'; ctx.font = `800 ${Math.round(width * .026)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(tierName, d.margin + d.labelWidth / 2, y + d.rowHeight / 2 + 9)
+    const labelFontSize = Math.round(Math.min(width * .065, d.rowHeight * .42))
+    ctx.fillStyle = tierTextColors[index] ?? '#344257'; ctx.font = `800 ${labelFontSize}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(tierName, d.margin + d.labelWidth / 2, y + d.rowHeight / 2 + labelFontSize * .34)
     ctx.fillStyle = '#050505'; ctx.fillRect(d.margin, y + d.rowHeight - 3, width - d.margin * 2, 3)
   })
   placed.forEach((item) => { const target = targetFor(item, width, height); ctx.save(); roundedClip(ctx, target.x, target.y, target.width, target.height, 10); drawCover(ctx, item.image, target.x, target.y, target.width, target.height); ctx.restore() })
