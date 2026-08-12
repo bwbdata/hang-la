@@ -3,8 +3,8 @@ import type { OutputRatio, VoiceClip } from '../types/ranking'
 import type { VideoItem } from '../components/VideoExportPanel.vue'
 
 type LoadedScene = VideoItem & { image?: HTMLImageElement }
-const tierColors = ['#e6f6cd', '#fff2c6', '#dff0ff', '#fae2f0', '#f5e5d8']
-const tierTextColors = ['#447020', '#766023', '#386892', '#8c4d7a', '#795256']
+const tierColors = ['#d4001a', '#d8ba20', '#f2e71b', '#fbf8a6', '#f4f4f4']
+const tierTextColors = ['#080808', '#080808', '#080808', '#080808', '#080808']
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = src })
@@ -27,9 +27,9 @@ function drawContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement | un
 }
 
 function dimensions(width: number, height: number) {
-  const margin = width * .045; const titleY = height * .075; const top = height * .16; const bottom = height * .07
-  const rowHeight = (height - top - bottom) / 5; const labelWidth = width * .16; const gridLeft = margin + labelWidth + width * .025
-  const cardWidth = Math.min((width - gridLeft - margin - 6 * 8) / 7, rowHeight - 18); const cardHeight = rowHeight - 18
+  const margin = 0; const titleY = height * .075; const top = height * .14; const bottom = height * .045
+  const rowHeight = (height - top - bottom) / 5; const labelWidth = width * .2; const gridLeft = labelWidth + width * .012
+  const cardWidth = Math.min((width - gridLeft - width * .012 - 6 * 8) / 7, rowHeight - 16); const cardHeight = rowHeight - 16
   return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardWidth, cardHeight }
 }
 
@@ -39,14 +39,15 @@ function targetFor(item: VideoItem, width: number, height: number) {
 }
 
 function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number, title: string, tierNames: string[], placed: LoadedScene[]) {
-  const gradient = ctx.createLinearGradient(0, 0, width, height); gradient.addColorStop(0, '#f4f8ff'); gradient.addColorStop(1, '#f8fbed'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height)
+  ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, width, height)
   const d = dimensions(width, height)
-  ctx.fillStyle = '#263247'; ctx.font = `800 ${Math.round(width * .035)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(title || '夯拉排名', width / 2, d.titleY)
+  ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.round(width * .035)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(title || '夯拉排名', width / 2, d.titleY)
   tierNames.forEach((tierName, index) => {
     const y = d.top + index * d.rowHeight
-    if (index) { ctx.fillStyle = '#3d4a60'; ctx.fillRect(d.margin, y - 1, width - d.margin * 2, 2) }
-    ctx.fillStyle = tierColors[index] ?? '#edf1f5'; ctx.fillRect(d.margin, y + 9, d.labelWidth, d.cardHeight)
+    ctx.fillStyle = '#909090'; ctx.fillRect(d.margin, y, width - d.margin * 2, d.rowHeight)
+    ctx.fillStyle = tierColors[index] ?? '#f4f4f4'; ctx.fillRect(d.margin, y, d.labelWidth, d.rowHeight)
     ctx.fillStyle = tierTextColors[index] ?? '#344257'; ctx.font = `800 ${Math.round(width * .026)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(tierName, d.margin + d.labelWidth / 2, y + d.rowHeight / 2 + 9)
+    ctx.fillStyle = '#050505'; ctx.fillRect(d.margin, y + d.rowHeight - 3, width - d.margin * 2, 3)
   })
   placed.forEach((item) => { const target = targetFor(item, width, height); ctx.save(); roundedClip(ctx, target.x, target.y, target.width, target.height, 10); drawCover(ctx, item.image, target.x, target.y, target.width, target.height); ctx.restore() })
 }
