@@ -65,17 +65,38 @@ export async function exportRecapVideo(args: { title: string; ratio: OutputRatio
   const portrait = args.ratio === '3:4'; const width = portrait ? 1080 : 1920; const height = portrait ? 1440 : 1080
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('无法创建视频画布')
-  const audioContext = new AudioContext(); const destination = audioContext.createMediaStreamDestination(); const canvasStream = canvas.captureStream(30)
-  const stream = new MediaStream([...canvasStream.getVideoTracks(), ...destination.stream.getAudioTracks()]); const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm'
+  // A silent audio track makes MediaRecorder emit a header-only WebM in some
+  // browsers. Keep no audio track at all when there is nothing to narrate.
+  const hasNarration = Boolean(args.introVoice || args.outroVoice || Object.keys(args.voiceClips).length)
+  const audioContext = hasNarration ? new AudioContext() : undefined
+  const destination = audioContext?.createMediaStreamDestination()
+  let canvasStream = canvas.captureStream(0)
+  let videoTrack = canvasStream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void }
+  if (!videoTrack) throw new Error('浏览器不支持视频画布导出。')
+  const manualFrameCapture = typeof videoTrack.requestFrame === 'function'
+  // Older implementations lack requestFrame(). Let their normal 30fps canvas
+  // capture path provide the video frames instead.
+  if (!manualFrameCapture) {
+    canvasStream = canvas.captureStream(30)
+    videoTrack = canvasStream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void }
+  }
+  const stream = new MediaStream([...canvasStream.getVideoTracks(), ...(destination?.stream.getAudioTracks() ?? [])]); const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm'
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 }); const chunks: BlobPart[] = []; recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
   const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: mime })) })
   const scenes: LoadedScene[] = await Promise.all(args.items.map(async (item) => ({ ...item, image: item.url ? await loadImage(item.url).catch(() => undefined) : undefined })))
   // Do not request periodic chunks. Some browsers return media fragments for
   // those chunks; a single final chunk always carries the WebM EBML header.
-  recorder.start(); await audioContext.resume(); const placed: LoadedScene[] = []
+  recorder.start()
+  await audioContext?.resume()
+  const placed: LoadedScene[] = []
+
+  function captureFrame(draw: () => void) {
+    draw()
+    if (manualFrameCapture) videoTrack.requestFrame?.()
+  }
 
   async function playVoice(clip?: VoiceClip) {
-    if (!clip) return
+    if (!clip || !audioContext || !destination) return
     const blob = await loadVoice(clip.blobKey)
     if (!blob) return
     const audio = new Audio(URL.createObjectURL(blob)); audio.onended = () => URL.revokeObjectURL(audio.src)
@@ -83,22 +104,22 @@ export async function exportRecapVideo(args: { title: string; ratio: OutputRatio
   }
 
   args.onProgress('正在添加开头解说…'); await playVoice(args.introVoice)
-  await animate(Math.max(1500, (args.introVoice?.durationMs ?? 0) + 250), () => drawBoard(ctx, width, height, args.title, args.tierNames, []))
+  await animate(Math.max(1500, (args.introVoice?.durationMs ?? 0) + 250), () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, [])))
 
   for (let index = 0; index < scenes.length; index += 1) {
     const item = scenes[index]; const clip = args.voiceClips[item.imageId]; const narrationDuration = Math.max(2400, (clip?.durationMs ?? 0) + 250)
     await playVoice(clip)
     args.onProgress(`正在放置 ${index + 1}/${scenes.length}`)
-    await animate(narrationDuration, (progress) => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const zoomProgress = Math.min(1, (progress * narrationDuration) / 500); const boxW = width * (portrait ? .68 : .38) * (.86 + zoomProgress * .14); const boxH = height * (portrait ? .38 : .56) * (.86 + zoomProgress * .14); drawFloatingImage(ctx, item, (width - boxW) / 2, (height - boxH) / 2 - height * .025, boxW, boxH, Math.round(width * .02), true) })
+    await animate(narrationDuration, (progress) => captureFrame(() => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const zoomProgress = Math.min(1, (progress * narrationDuration) / 500); const boxW = width * (portrait ? .68 : .38) * (.86 + zoomProgress * .14); const boxH = height * (portrait ? .38 : .56) * (.86 + zoomProgress * .14); drawFloatingImage(ctx, item, (width - boxW) / 2, (height - boxH) / 2 - height * .025, boxW, boxH, Math.round(width * .02), true) }))
     const startW = width * (portrait ? .68 : .38); const startH = height * (portrait ? .38 : .56); const startX = (width - startW) / 2; const startY = (height - startH) / 2 - height * .025; const target = targetFor(item, width, height)
-    await animate(650, (progress) => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const x = startX + (target.x - startX) * progress; const y = startY + (target.y - startY) * progress; const boxW = startW + (target.width - startW) * progress; const boxH = startH + (target.height - startH) * progress; drawFloatingImage(ctx, item, x, y, boxW, boxH, Math.max(1, Math.round(width * .02 * (1 - progress))) ) })
+    await animate(650, (progress) => captureFrame(() => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const x = startX + (target.x - startX) * progress; const y = startY + (target.y - startY) * progress; const boxW = startW + (target.width - startW) * progress; const boxH = startH + (target.height - startH) * progress; drawFloatingImage(ctx, item, x, y, boxW, boxH, Math.max(1, Math.round(width * .02 * (1 - progress))) ) }))
     placed.push(item)
-    await animate(args.placementPauseMs, () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
+    await animate(args.placementPauseMs, () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, placed)))
   }
-  args.onProgress('正在添加结尾解说…'); await playVoice(args.outroVoice); await animate(Math.max(1800, (args.outroVoice?.durationMs ?? 0) + 250), () => drawBoard(ctx, width, height, args.title, args.tierNames, placed))
-  recorder.stop(); const blob = await done; await audioContext.close()
+  args.onProgress('正在添加结尾解说…'); await playVoice(args.outroVoice); await animate(Math.max(1800, (args.outroVoice?.durationMs ?? 0) + 250), () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, placed)))
+  recorder.stop(); const blob = await done; await audioContext?.close()
   const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer())
   const validWebm = header.length === 4 && header[0] === 0x1a && header[1] === 0x45 && header[2] === 0xdf && header[3] === 0xa3
-  if (!validWebm) throw new Error('浏览器没有生成有效的 WebM 回顾文件，请刷新页面后重试。')
+  if (!validWebm || blob.size < 1024) throw new Error('浏览器没有生成有效的 WebM 回顾文件，请刷新页面后重试。')
   return blob
 }
