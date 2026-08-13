@@ -8,6 +8,6 @@ const emit = defineEmits<{ remove: [] }>()
     <img v-if="url" :src="url" :alt="name" draggable="false" />
     <div v-else class="missing-image">图片丢失</div>
     <button v-if="removable" type="button" class="remove-image" :aria-label="`删除 ${name}`" @click.stop="emit('remove')">×</button>
-    <small>{{ name }}</small>
+    <small>{{ name.replace(/\.[^/.]+$/, '') }}</small>
   </article>
 </template>
