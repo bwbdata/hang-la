@@ -19,6 +19,7 @@ function checkMove(event: { to: { dataset: DOMStringMap }; from: { dataset: DOMS
     <draggable
       :list="tier.imageIds"
       class="rank-grid"
+      :class="{ 'is-empty': !tier.imageIds.length }"
       :data-tier-id="tier.id"
       item-key="id"
       :group="{ name: 'ranking-images', pull: true, put: true }"
