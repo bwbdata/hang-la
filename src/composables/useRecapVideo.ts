@@ -26,16 +26,27 @@ function drawContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement | un
   ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
+function displayName(name: string) { return name.replace(/\.[^/.]+$/, '') }
+
+function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  if (ctx.measureText(text).width <= maxWidth) return text
+  let shortened = text
+  while (shortened && ctx.measureText(`${shortened}…`).width > maxWidth) shortened = shortened.slice(0, -1)
+  return `${shortened}…`
+}
+
 function dimensions(width: number, height: number) {
   const margin = 0; const titleY = height * .075; const top = height * .14; const bottom = height * .045
   const rowHeight = (height - top - bottom) / 5; const labelWidth = width * .2; const gridLeft = labelWidth + width * .012
-  const cardSize = Math.min((width - gridLeft - width * .012 - 6 * 8) / 7, rowHeight - 16)
-  return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardSize }
+  const cardLabelHeight = Math.min(28, rowHeight * .16)
+  const cardSize = Math.min((width - gridLeft - width * .012 - 6 * 8) / 7, rowHeight - cardLabelHeight - 16)
+  return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardSize, cardLabelHeight }
 }
 
 function targetFor(item: VideoItem, width: number, height: number) {
   const d = dimensions(width, height); const tier = item.tierIndex ?? 0; const rank = item.rankIndex ?? 0
-  return { x: d.gridLeft + rank * (d.cardSize + 8), y: d.top + tier * d.rowHeight + (d.rowHeight - d.cardSize) / 2, width: d.cardSize, height: d.cardSize }
+  const cardHeight = d.cardSize + d.cardLabelHeight
+  return { x: d.gridLeft + rank * (d.cardSize + 8), y: d.top + tier * d.rowHeight + (d.rowHeight - cardHeight) / 2, width: d.cardSize, height: d.cardSize, labelHeight: d.cardLabelHeight }
 }
 
 function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number, title: string, tierNames: string[], placed: LoadedScene[]) {
@@ -50,12 +61,18 @@ function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number,
     ctx.fillStyle = tierTextColors[index] ?? '#344257'; ctx.font = `800 ${labelFontSize}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(tierName, d.margin + d.labelWidth / 2, y + d.rowHeight / 2 + labelFontSize * .34)
     ctx.fillStyle = '#050505'; ctx.fillRect(d.margin, y + d.rowHeight - 3, width - d.margin * 2, 3)
   })
-  placed.forEach((item) => { const target = targetFor(item, width, height); ctx.save(); roundedClip(ctx, target.x, target.y, target.width, target.height, 10); drawCover(ctx, item.image, target.x, target.y, target.width, target.height); ctx.restore() })
+  placed.forEach((item) => {
+    const target = targetFor(item, width, height)
+    ctx.save(); roundedClip(ctx, target.x, target.y, target.width, target.height, 10); drawCover(ctx, item.image, target.x, target.y, target.width, target.height); ctx.restore()
+    ctx.fillStyle = '#202020'; ctx.fillRect(target.x, target.y + target.height, target.width, target.labelHeight)
+    const nameSize = Math.max(10, Math.min(16, target.labelHeight * .55)); ctx.fillStyle = '#fff'; ctx.font = `700 ${nameSize}px sans-serif`; ctx.textAlign = 'center'
+    ctx.fillText(truncateText(ctx, displayName(item.name), target.width - 10), target.x + target.width / 2, target.y + target.height + target.labelHeight * .68)
+  })
 }
 
 function drawFloatingImage(ctx: CanvasRenderingContext2D, item: LoadedScene, x: number, y: number, width: number, height: number, nameSize: number, contain = false) {
   ctx.save(); roundedClip(ctx, x, y, width, height, 18); if (contain) drawContain(ctx, item.image, x, y, width, height); else drawCover(ctx, item.image, x, y, width, height); ctx.restore()
-  ctx.fillStyle = '#2e3a50'; ctx.font = `700 ${nameSize}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(item.name, x + width / 2, y + height + nameSize * 1.6)
+  ctx.fillStyle = '#2e3a50'; ctx.font = `700 ${nameSize}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(displayName(item.name), x + width / 2, y + height + nameSize * 1.6)
 }
 
 function animate(duration: number, frame: (progress: number) => void) {

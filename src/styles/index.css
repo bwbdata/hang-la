@@ -47,3 +47,6 @@
 .rank-editor-frame.rank-editor-frame.rank-editor-frame .rank-grid { height: 122px; min-height: 122px; max-height: 122px; grid-template-columns: repeat(7, 92px); grid-auto-columns: 92px; grid-template-rows: 122px; grid-auto-rows: 122px; }
 .rank-editor-frame.rank-editor-frame.rank-editor-frame .rank-grid .rank-card { justify-self: start; align-self: start; width: 92px; min-width: 92px; }
 .rank-editor-frame.rank-editor-frame.rank-editor-frame .rank-grid .rank-card img { height: auto; aspect-ratio: 1 / 1; object-fit: cover; }
+
+/* 上传预览使用正方形缩略图，裁切而不拉伸原始图片。 */
+.uploaded-grid .rank-card img { height: auto; aspect-ratio: 1 / 1; object-fit: cover; }

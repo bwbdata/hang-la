@@ -40,7 +40,7 @@ function selectFiles(files: FileList | null) {
     <section class="step-panel uploaded-preview">
       <div class="preview-heading"><div><span class="eyebrow">已上传图片</span><h2>图片预览</h2></div><b>{{ Object.keys(images).length }} 张</b></div>
       <div v-if="Object.keys(images).length" class="uploaded-grid">
-        <RankCard v-for="image in Object.values(images)" :key="image.id" :url="image.previewUrl" :name="image.name" removable @remove="emit('remove', image.id)" />
+        <RankCard v-for="image in Object.values(images)" :key="image.id" :url="image.previewUrl" :name="image.name.replace(/\.[^/.]+$/, '')" removable @remove="emit('remove', image.id)" />
       </div>
       <div v-else class="uploaded-grid uploaded-placeholder-grid">
         <div v-for="index in 7" :key="index" class="uploaded-placeholder"><span>＋</span><small>待上传</small></div>
