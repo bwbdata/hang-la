@@ -40,16 +40,24 @@ function dimensions(width: number, height: number) {
   const rowHeight = (height - top - bottom) / 5; const labelWidth = width * .2; const gridLeft = labelWidth + width * .012
   const cardLabelHeight = Math.min(28, rowHeight * .16)
   const cardSize = Math.min((width - gridLeft - width * .012 - 6 * 8) / 7, rowHeight - cardLabelHeight - 16)
-  return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardSize, cardLabelHeight }
+  return { margin, titleY, top, rowHeight, labelWidth, gridLeft, cardSize, cardLabelHeight, gridWidth: width - gridLeft - width * .012 }
 }
 
-function targetFor(item: VideoItem, width: number, height: number) {
+function targetFor(item: VideoItem, width: number, height: number, tierImageCounts: number[]) {
   const d = dimensions(width, height); const tier = item.tierIndex ?? 0; const rank = item.rankIndex ?? 0
-  const cardHeight = d.cardSize + d.cardLabelHeight
-  return { x: d.gridLeft + rank * (d.cardSize + 8), y: d.top + tier * d.rowHeight + (d.rowHeight - cardHeight) / 2, width: d.cardSize, height: d.cardSize, labelHeight: d.cardLabelHeight }
+  const portrait = height > width
+  const imageCount = Math.max(1, tierImageCounts[tier] ?? 1); const columnCount = portrait ? Math.min(7, imageCount) : 7
+  const rowCount = Math.ceil(imageCount / columnCount); const gap = 8
+  const cardSize = Math.min(
+    (d.gridWidth - (columnCount - 1) * gap) / columnCount,
+    (d.rowHeight - 16 - rowCount * d.cardLabelHeight - (rowCount - 1) * gap) / rowCount,
+  )
+  const row = Math.floor(rank / columnCount); const column = rank % columnCount
+  const groupHeight = rowCount * (cardSize + d.cardLabelHeight) + (rowCount - 1) * gap
+  return { x: d.gridLeft + column * (cardSize + gap), y: d.top + tier * d.rowHeight + (d.rowHeight - groupHeight) / 2 + row * (cardSize + d.cardLabelHeight + gap), width: cardSize, height: cardSize, labelHeight: d.cardLabelHeight }
 }
 
-function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number, title: string, tierNames: string[], placed: LoadedScene[]) {
+function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number, title: string, tierNames: string[], placed: LoadedScene[], tierImageCounts: number[]) {
   ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, width, height)
   const d = dimensions(width, height)
   ctx.fillStyle = '#fff'; ctx.font = `800 ${Math.round(width * .035)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(title || '夯拉排名', width / 2, d.titleY)
@@ -62,7 +70,7 @@ function drawBoard(ctx: CanvasRenderingContext2D, width: number, height: number,
     ctx.fillStyle = '#050505'; ctx.fillRect(d.margin, y + d.rowHeight - 3, width - d.margin * 2, 3)
   })
   placed.forEach((item) => {
-    const target = targetFor(item, width, height)
+    const target = targetFor(item, width, height, tierImageCounts)
     ctx.save(); roundedClip(ctx, target.x, target.y, target.width, target.height, 10); drawCover(ctx, item.image, target.x, target.y, target.width, target.height); ctx.restore()
     ctx.fillStyle = '#202020'; ctx.fillRect(target.x, target.y + target.height, target.width, target.labelHeight)
     const nameSize = Math.max(10, Math.min(16, target.labelHeight * .55)); ctx.fillStyle = '#fff'; ctx.font = `700 ${nameSize}px sans-serif`; ctx.textAlign = 'center'
@@ -102,6 +110,7 @@ export async function exportRecapVideo(args: { title: string; ratio: OutputRatio
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 }); const chunks: BlobPart[] = []; recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
   const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: mime })) })
   const scenes: LoadedScene[] = await Promise.all(args.items.map(async (item) => ({ ...item, image: item.url ? await loadImage(item.url).catch(() => undefined) : undefined })))
+  const tierImageCounts = args.tierNames.map((_, tierIndex) => scenes.filter((item) => item.tierIndex === tierIndex).length)
   // Do not request periodic chunks. Some browsers return media fragments for
   // those chunks; a single final chunk always carries the WebM EBML header.
   recorder.start()
@@ -122,19 +131,19 @@ export async function exportRecapVideo(args: { title: string; ratio: OutputRatio
   }
 
   args.onProgress('正在添加开头解说…'); await playVoice(args.introVoice)
-  await animate(Math.max(1500, (args.introVoice?.durationMs ?? 0) + 250), () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, [])))
+  await animate(Math.max(1500, (args.introVoice?.durationMs ?? 0) + 250), () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, [], tierImageCounts)))
 
   for (let index = 0; index < scenes.length; index += 1) {
     const item = scenes[index]; const clip = args.voiceClips[item.imageId]; const narrationDuration = Math.max(2400, (clip?.durationMs ?? 0) + 250)
     await playVoice(clip)
     args.onProgress(`正在放置 ${index + 1}/${scenes.length}`)
-    await animate(narrationDuration, (progress) => captureFrame(() => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const zoomProgress = Math.min(1, (progress * narrationDuration) / 500); const boxW = width * (portrait ? .68 : .38) * (.86 + zoomProgress * .14); const boxH = height * (portrait ? .38 : .56) * (.86 + zoomProgress * .14); drawFloatingImage(ctx, item, (width - boxW) / 2, (height - boxH) / 2 - height * .025, boxW, boxH, Math.round(width * .02), true) }))
-    const startW = width * (portrait ? .68 : .38); const startH = height * (portrait ? .38 : .56); const startX = (width - startW) / 2; const startY = (height - startH) / 2 - height * .025; const target = targetFor(item, width, height)
-    await animate(650, (progress) => captureFrame(() => { drawBoard(ctx, width, height, args.title, args.tierNames, placed); const x = startX + (target.x - startX) * progress; const y = startY + (target.y - startY) * progress; const boxW = startW + (target.width - startW) * progress; const boxH = startH + (target.height - startH) * progress; drawFloatingImage(ctx, item, x, y, boxW, boxH, Math.max(1, Math.round(width * .02 * (1 - progress))) ) }))
+    await animate(narrationDuration, (progress) => captureFrame(() => { drawBoard(ctx, width, height, args.title, args.tierNames, placed, tierImageCounts); const zoomProgress = Math.min(1, (progress * narrationDuration) / 500); const boxW = width * (portrait ? .68 : .38) * (.86 + zoomProgress * .14); const boxH = height * (portrait ? .38 : .56) * (.86 + zoomProgress * .14); drawFloatingImage(ctx, item, (width - boxW) / 2, (height - boxH) / 2 - height * .025, boxW, boxH, Math.round(width * .02), true) }))
+    const startW = width * (portrait ? .68 : .38); const startH = height * (portrait ? .38 : .56); const startX = (width - startW) / 2; const startY = (height - startH) / 2 - height * .025; const target = targetFor(item, width, height, tierImageCounts)
+    await animate(650, (progress) => captureFrame(() => { drawBoard(ctx, width, height, args.title, args.tierNames, placed, tierImageCounts); const x = startX + (target.x - startX) * progress; const y = startY + (target.y - startY) * progress; const boxW = startW + (target.width - startW) * progress; const boxH = startH + (target.height - startH) * progress; drawFloatingImage(ctx, item, x, y, boxW, boxH, Math.max(1, Math.round(width * .02 * (1 - progress))) ) }))
     placed.push(item)
-    await animate(args.placementPauseMs, () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, placed)))
+    await animate(args.placementPauseMs, () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, placed, tierImageCounts)))
   }
-  args.onProgress('正在添加结尾解说…'); await playVoice(args.outroVoice); await animate(Math.max(1800, (args.outroVoice?.durationMs ?? 0) + 250), () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, placed)))
+  args.onProgress('正在添加结尾解说…'); await playVoice(args.outroVoice); await animate(Math.max(1800, (args.outroVoice?.durationMs ?? 0) + 250), () => captureFrame(() => drawBoard(ctx, width, height, args.title, args.tierNames, placed, tierImageCounts)))
   recorder.stop(); const blob = await done; await audioContext?.close()
   const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer())
   const validWebm = header.length === 4 && header[0] === 0x1a && header[1] === 0x45 && header[2] === 0xdf && header[3] === 0xa3
